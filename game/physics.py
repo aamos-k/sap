@@ -7,6 +7,7 @@ from cave.grid import CaveGrid
 GRAVITY = 2          # tiles per turn
 TERMINAL_VEL = 20    # tiles per turn cap
 HIT_RADIUS = 14      # pixels — limb tip hits if closer than this to enemy body
+BODY_RADIUS = 8      # pixels — collision radius of the body circle
 
 
 def resolve_anchoring(limb: Limb, grid: CaveGrid) -> None:
@@ -43,12 +44,19 @@ def apply_gravity(character: Character, grid: CaveGrid) -> None:
     character.vel_y = min(character.vel_y + GRAVITY * ts, TERMINAL_VEL * ts)
     new_y = character.body_y + character.vel_y
 
-    # Check for floor collision
-    tx, ty = grid.world_to_tile(character.body_x, new_y)
-    if grid.is_solid(tx, ty):
-        # Snap above solid
-        new_y = ty * ts - 1.0
+    # Check body's bottom edge for floor collision; this fires as soon as the
+    # body circle touches a solid tile rather than waiting until the centre
+    # has crossed fully into the tile.
+    btx, bty = grid.world_to_tile(character.body_x, new_y + BODY_RADIUS)
+    if grid.is_solid(btx, bty):
+        new_y = bty * ts - BODY_RADIUS
         character.vel_y = 0.0
+    else:
+        # Fallback for fast falls that skip the bottom-edge check
+        ctx, cty = grid.world_to_tile(character.body_x, new_y)
+        if grid.is_solid(ctx, cty):
+            new_y = cty * ts - BODY_RADIUS
+            character.vel_y = 0.0
 
     dy = new_y - character.body_y
     character.body_y = new_y

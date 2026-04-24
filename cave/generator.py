@@ -5,7 +5,7 @@ from collections import deque
 from .grid import CaveGrid
 
 
-def generate_cave(width: int = 256, height: int = 128,
+def generate_cave(width: int = 400, height: int = 200,
                   seed: int = 0) -> tuple[CaveGrid, tuple[int, int], list[tuple[int, int]]]:
     """
     Returns (grid, bulb_centre_tile, room_centres_tiles).
@@ -18,14 +18,14 @@ def generate_cave(width: int = 256, height: int = 128,
     bulb_cx = width // 5
     bulb_cy = height // 2
 
-    # Phase 1: bulb cavern
-    grid.carve_ellipse(bulb_cx, bulb_cy, rx=12, ry=9, noise_amplitude=3.0, rng=rng)
+    # Phase 1: bulb cavern (smaller so arms feel more earned)
+    grid.carve_ellipse(bulb_cx, bulb_cy, rx=8, ry=6, noise_amplitude=2.0, rng=rng)
 
     room_centres: list[tuple[int, int]] = []
 
     # Phase 2: recursive arms
     _carve_arm(grid, rng, bulb_cx, bulb_cy,
-               angle=0.0, depth=0, max_depth=4,
+               angle=0.0, depth=0, max_depth=5,
                room_centres=room_centres)
 
     # Phase 3: flood-fill connectivity from bulb
@@ -50,28 +50,27 @@ def _carve_arm(grid: CaveGrid, rng: random.Random,
     if rng.random() < exit_prob:
         return
 
-    tunnel_width = rng.randint(1, 3)
-    tunnel_length = rng.randint(20, 50)
-    approach_steps = rng.randint(8, 16)
-    room_rx = rng.randint(6, 13)
-    room_ry = rng.randint(5, 10)
+    tunnel_width = rng.randint(1, 2)           # narrower (was 1–3)
+    tunnel_length = rng.randint(50, 110)       # longer   (was 20–50)
+    approach_steps = rng.randint(4, 8)         # shorter flare (was 8–16)
+    room_rx = rng.randint(4, 8)               # smaller rooms (was 6–13)
+    room_ry = rng.randint(3, 6)               # smaller rooms (was 5–10)
 
     cx, cy = float(start_x), float(start_y)
 
-    # Thin tunnel
+    # Thin tunnel — more winding angle for spindliness
     for _ in range(tunnel_length):
-        angle += rng.uniform(-0.18, 0.18)
+        angle += rng.uniform(-0.25, 0.25)
         cx += math.cos(angle)
         cy += math.sin(angle)
-        # Clamp away from borders
         cx = max(4.0, min(grid.width - 5.0, cx))
         cy = max(4.0, min(grid.height - 5.0, cy))
         grid.carve_circle(int(cx), int(cy), radius=tunnel_width)
 
-    # Widening approach
+    # Widening approach — gentler flare so rooms stay tight
     for i in range(approach_steps):
         t = i / approach_steps
-        w = tunnel_width + t * (room_ry * 0.6)
+        w = tunnel_width + t * (room_ry * 0.35)
         angle += rng.uniform(-0.12, 0.12)
         cx += math.cos(angle)
         cy += math.sin(angle)
@@ -82,11 +81,11 @@ def _carve_arm(grid: CaveGrid, rng: random.Random,
     # Room
     room_cx, room_cy = int(cx), int(cy)
     grid.carve_ellipse(room_cx, room_cy, rx=room_rx, ry=room_ry,
-                       noise_amplitude=2.5, rng=rng)
+                       noise_amplitude=2.0, rng=rng)
     room_centres.append((room_cx, room_cy))
 
-    # Branch
-    num_branches = rng.randint(1, 3)
+    # Branch — more arms for better map coverage
+    num_branches = rng.randint(2, 4)
     for _ in range(num_branches):
         new_angle = angle + rng.uniform(-math.pi / 2, math.pi / 2)
         _carve_arm(grid, rng, room_cx, room_cy,
