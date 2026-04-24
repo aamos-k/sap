@@ -41,11 +41,12 @@ class HUD:
             self.btn_rects[lid] = pygame.Rect(x, y, BTN_W, BTN_H)
 
     def draw(self, screen: pygame.Surface, tm: TurnManager,
-             mouse_pos: tuple[int, int]) -> None:
+             mouse_pos: tuple[int, int], seed: int = 0) -> None:
         self._draw_turn_label(screen, tm)
         self._draw_limb_buttons(screen, tm, mouse_pos)
         self._draw_instructions(screen, tm)
         self._draw_flash(screen, tm)
+        self._draw_seed(screen, seed)
         if tm.state == TurnState.GAME_OVER:
             self._draw_game_over(screen, tm)
 
@@ -131,6 +132,9 @@ class HUD:
         sub = self.font_large.render("Press R to restart", True, (180, 180, 180))
         screen.blit(sub, (self.screen_w // 2 - sub.get_width() // 2,
                           self.screen_h // 2 + 30))
+    def _draw_seed(self, screen: pygame.Surface, seed: int) -> None:
+        surf = self.font_small.render(f"seed: {seed}", True, (90, 90, 110))
+        screen.blit(surf, (self.screen_w - surf.get_width() - 10, 10))
 
     def hit_test_limb_button(self, pos: tuple[int, int]) -> LimbId | None:
         for lid, rect in self.btn_rects.items():
