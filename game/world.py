@@ -92,15 +92,11 @@ class World:
         self._update_bags()
         self.camera.follow(self.player.body_x, self.player.body_y)
 
-    def _all_limb_tips(self) -> list[tuple[float, float]]:
-        tips = []
-        for entity in self.entities:
-            for limb in entity.limbs.values():
-                tips.append((limb.tip_x, limb.tip_y))
-        return tips
+    def _player_limb_tips(self) -> list[tuple[float, float]]:
+        return [(limb.tip_x, limb.tip_y) for limb in self.player.limbs.values()]
 
     def _update_bags(self) -> None:
-        tips = self._all_limb_tips()
+        tips = self._player_limb_tips()
         for bag in self.bags:
             bag.check_spill(tips)
             bag.update(self.grid, _DT)
