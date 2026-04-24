@@ -57,7 +57,7 @@ class Renderer:
         for entity in world.entities:
             draw_character(screen, camera, entity, tm)
 
-        self.hud.draw(screen, tm, mouse_pos)
+        self.hud.draw(screen, tm, mouse_pos, seed=world.seed)
         pygame.display.flip()
 
     def _draw_bags(self, screen: pygame.Surface, camera) -> None:
