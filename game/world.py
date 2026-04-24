@@ -18,7 +18,7 @@ class World:
     def __init__(self, seed: int = 0):
         self._rng = random.Random(seed + 99)
 
-        grid, bulb, room_centres = generate_cave(width=256, height=128, seed=seed)
+        grid, bulb, room_centres = generate_cave(width=400, height=200, seed=seed)
         self.grid: CaveGrid = grid
 
         bx, by = grid.tile_to_world(*bulb)
