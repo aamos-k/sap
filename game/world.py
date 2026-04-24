@@ -4,6 +4,8 @@ from cave.generator import generate_cave
 from cave.grid import CaveGrid
 from entities.player import Player
 from entities.enemy import Enemy
+from entities.slime_mold import SlimeMold
+from entities.loot_bag import LootBag
 from entities.limb import LimbId
 from game.physics import (resolve_anchoring, apply_gravity,
                            clamp_limb_to_open, check_collision_damage)
@@ -12,6 +14,7 @@ from rendering.camera import Camera
 
 ENEMY_THINK_TICKS = 18   # ~0.3s at 60fps
 TILE_SIZE = 16
+_DT = 1.0 / 60           # physics timestep (seconds per frame)
 
 
 class World:
@@ -31,16 +34,35 @@ class World:
             resolve_anchoring(limb, grid)
         self.player.compute_body_position()
 
+        # Spawn 1-2 enemies per room, skipping the first three rooms
         self.enemies: list[Enemy] = []
-        if room_centres:
-            ex, ey = grid.tile_to_world(*room_centres[0])
-            enemy = Enemy.create(ex, ey - TILE_SIZE)
-            for lid in (LimbId.LEFT_LEG, LimbId.RIGHT_LEG):
-                limb = enemy.get_limb(lid)
-                clamp_limb_to_open(limb, grid)
-                resolve_anchoring(limb, grid)
-            enemy.compute_body_position()
-            self.enemies.append(enemy)
+        for i, room_centre in enumerate(room_centres):
+            if i < 3:
+                continue
+            ex, ey = grid.tile_to_world(*room_centre)
+            count = self._rng.randint(1, 2)
+            for j in range(count):
+                offset_x = (j - (count - 1) / 2) * 26
+                spawn_x = ex + offset_x
+                spawn_y = ey - TILE_SIZE
+                if self._rng.random() < 0.4:
+                    enemy: Enemy = SlimeMold.create(spawn_x, spawn_y)
+                else:
+                    enemy = Enemy.create(spawn_x, spawn_y)
+                for lid in (LimbId.LEFT_LEG, LimbId.RIGHT_LEG):
+                    limb = enemy.get_limb(lid)
+                    clamp_limb_to_open(limb, grid)
+                    resolve_anchoring(limb, grid)
+                enemy.compute_body_position()
+                self.enemies.append(enemy)
+
+        # One loot bag per room (all rooms)
+        self.bags: list[LootBag] = []
+        for room_centre in room_centres:
+            bx_r, by_r = grid.tile_to_world(*room_centre)
+            bag_rng = random.Random(self._rng.randint(0, 2 ** 32))
+            bag = LootBag(bx_r, by_r - TILE_SIZE, rng=bag_rng)
+            self.bags.append(bag)
 
         self.turn_manager = TurnManager(player=self.player, enemies=self.enemies)
         self.camera = Camera(
@@ -67,7 +89,21 @@ class World:
                 self._enemy_think_timer = 0
                 self._run_enemy_turns()
 
+        self._update_bags()
         self.camera.follow(self.player.body_x, self.player.body_y)
+
+    def _all_limb_tips(self) -> list[tuple[float, float]]:
+        tips = []
+        for entity in self.entities:
+            for limb in entity.limbs.values():
+                tips.append((limb.tip_x, limb.tip_y))
+        return tips
+
+    def _update_bags(self) -> None:
+        tips = self._all_limb_tips()
+        for bag in self.bags:
+            bag.check_spill(tips)
+            bag.update(self.grid, _DT)
 
     def _run_enemy_turns(self) -> None:
         tm = self.turn_manager

@@ -29,7 +29,7 @@ def draw_character(screen: pygame.Surface, camera: Camera,
         return
 
     bx, by = camera.world_to_screen(char.body_x, char.body_y)
-    pfx = 'player' if char.is_player else 'enemy'
+    pfx = getattr(char, 'sprite_prefix', 'player' if char.is_player else 'enemy')
 
     # Determine selected limb (for tip highlight)
     selected: LimbId | None = None
