@@ -16,6 +16,11 @@ class Enemy(Character):
         e.__dict__.update(c.__dict__)
         return e
 
+    def anchor_limb(self, limb, grid: CaveGrid) -> None:
+        """Resolve anchoring after a limb move. Overridable per enemy type."""
+        from game.physics import resolve_anchoring
+        resolve_anchoring(limb, grid)
+
     def choose_move(self, grid: CaveGrid, player_x: float, player_y: float,
                     rng: random.Random) -> tuple[LimbId, float, float]:
         best_score = -math.inf

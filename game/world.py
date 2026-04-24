@@ -92,15 +92,12 @@ class World:
         self._update_bags()
         self.camera.follow(self.player.body_x, self.player.body_y)
 
-    def _all_limb_tips(self) -> list[tuple[float, float]]:
-        tips = []
-        for entity in self.entities:
-            for limb in entity.limbs.values():
-                tips.append((limb.tip_x, limb.tip_y))
-        return tips
+    def _player_limb_tips(self) -> list[tuple[float, float]]:
+        """Only the player's limb tips can open loot bags."""
+        return [(l.tip_x, l.tip_y) for l in self.player.limbs.values()]
 
     def _update_bags(self) -> None:
-        tips = self._all_limb_tips()
+        tips = self._player_limb_tips()
         for bag in self.bags:
             bag.check_spill(tips)
             bag.update(self.grid, _DT)
@@ -115,7 +112,7 @@ class World:
             limb = enemy.get_limb(lid)
             limb.tip_x, limb.tip_y = wx, wy
             clamp_limb_to_open(limb, self.grid)
-            resolve_anchoring(limb, self.grid)
+            enemy.anchor_limb(limb, self.grid)
             enemy.compute_body_position()
             apply_gravity(enemy, self.grid)
 
