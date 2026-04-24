@@ -42,28 +42,35 @@ def apply_gravity(character: Character, grid: CaveGrid) -> None:
 
     ts = grid.TILE_SIZE
     character.vel_y = min(character.vel_y + GRAVITY * ts, TERMINAL_VEL * ts)
-    new_y = character.body_y + character.vel_y
 
-    # Check body's bottom edge for floor collision; this fires as soon as the
-    # body circle touches a solid tile rather than waiting until the centre
-    # has crossed fully into the tile.
-    btx, bty = grid.world_to_tile(character.body_x, new_y + BODY_RADIUS)
-    if grid.is_solid(btx, bty):
-        new_y = bty * ts - BODY_RADIUS
-        character.vel_y = 0.0
-    else:
-        # Fallback for fast falls that skip the bottom-edge check
-        ctx, cty = grid.world_to_tile(character.body_x, new_y)
-        if grid.is_solid(ctx, cty):
-            new_y = cty * ts - BODY_RADIUS
+    # Sweep downward in BODY_RADIUS-sized steps so fast falls never tunnel
+    # through floors.  Step (8 px) < TILE_SIZE (16 px), so any 1-tile-thick
+    # floor is guaranteed to be detected before the body centre crosses it.
+    step = BODY_RADIUS
+    remaining = character.vel_y          # always ≥ 0; gravity is downward only
+    new_y = character.body_y
+
+    while remaining > 0:
+        advance = min(step, remaining)
+        candidate = new_y + advance
+        btx, bty = grid.world_to_tile(character.body_x, candidate + BODY_RADIUS)
+        if grid.is_solid(btx, bty):
+            new_y = bty * ts - BODY_RADIUS  # snap body flush above tile top
             character.vel_y = 0.0
+            remaining = 0
+            break
+        new_y = candidate
+        remaining -= advance
 
-    dy = new_y - character.body_y
+    actual_dy = new_y - character.body_y
     character.body_y = new_y
-    # Move un-anchored limb tips with body
+
+    # Drag unanchored limb tips and immediately clamp them back to open space
+    # so they never end up stuck inside rock (which would block re-anchoring).
     for limb in character.limbs.values():
         if not limb.anchored:
-            limb.tip_y += dy
+            limb.tip_y += actual_dy
+            clamp_limb_to_open(limb, grid)
 
 
 def clamp_limb_to_open(limb: Limb, grid: CaveGrid) -> None:
