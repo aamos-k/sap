@@ -40,6 +40,10 @@ def _init() -> None:
         'enemy_torso':  _enemy_torso,
         'enemy_arm':    _enemy_arm,
         'enemy_leg':    _enemy_leg,
+        'slime_head':   _slime_head,
+        'slime_torso':  _slime_torso,
+        'slime_arm':    _slime_arm,
+        'slime_leg':    _slime_leg,
     }
     for name, gen in generators.items():
         path = os.path.join(_ASSETS, f'{name}.png')
@@ -317,4 +321,106 @@ def _enemy_leg() -> pygame.Surface:
     pygame.draw.rect(s, _EO, (1, 8, 10, 18), 1, border_radius=3)
     pygame.draw.rect(s, _EO, (2, 32, 8, 10), 1, border_radius=2)
     pygame.draw.rect(s, _EO, (1, 42, 10, 6), 1, border_radius=2)
+    return s
+
+
+# ── Slime mold colour palette ──────────────────────────────────────────────────
+
+_SB  = ( 50, 140,  40)   # base green
+_SBD = ( 25,  85,  18)   # dark green
+_SBL = (110, 200,  65)   # light / highlight
+_SEY = (185, 255,  20)   # eye glow (yellow-green)
+_SO  = ( 15,  50,  10)   # outline
+
+
+def _slime_head() -> pygame.Surface:
+    w, h = 20, 20
+    s = _blank(w, h)
+
+    # Main blob
+    pygame.draw.ellipse(s, _SB, (1, 2, 18, 15))
+
+    # Surface highlight bubbles
+    pygame.draw.circle(s, _SBL, (7, 5), 3)
+    pygame.draw.circle(s, _SBL, (13, 5), 2)
+
+    # Glowing eyes
+    pygame.draw.circle(s, _SEY, (6, 11), 3)
+    pygame.draw.circle(s, _SEY, (14, 11), 3)
+    pygame.draw.circle(s, (220, 255, 140), (6, 10), 1)
+    pygame.draw.circle(s, (220, 255, 140), (14, 10), 1)
+
+    # Drip at bottom
+    pygame.draw.ellipse(s, _SBD, (7, 16, 6, 4))
+
+    # Outline
+    pygame.draw.ellipse(s, _SO, (1, 2, 18, 15), 1)
+    return s
+
+
+def _slime_torso() -> pygame.Surface:
+    w, h = 20, 16
+    s = _blank(w, h)
+
+    # Main blob
+    pygame.draw.ellipse(s, _SB, (0, 1, 20, 14))
+
+    # Highlight patch
+    pygame.draw.ellipse(s, _SBL, (2, 2, 8, 5))
+
+    # Internal dark bubbles for texture
+    pygame.draw.circle(s, _SBD, (8, 9), 3)
+    pygame.draw.circle(s, _SBD, (14, 8), 2)
+    pygame.draw.circle(s, _SBD, (5, 10), 2)
+
+    # Outline
+    pygame.draw.ellipse(s, _SO, (0, 1, 20, 14), 1)
+    return s
+
+
+def _slime_arm() -> pygame.Surface:
+    """8×50 px pseudopod, attachment at top, drip tip at bottom."""
+    w, h = 8, 50
+    s = _blank(w, h)
+
+    # Tapered pseudopod body
+    pygame.draw.polygon(s, _SB, [(0, 0), (w, 0), (6, 44), (4, 50), (2, 44)])
+
+    # Highlight strip along leading edge
+    pygame.draw.polygon(s, _SBL, [(1, 1), (4, 1), (3, 18), (1, 18)])
+
+    # Segment rings
+    for y in range(10, 44, 10):
+        half = max(1, int(3 - y * 0.03))
+        pygame.draw.line(s, _SBD, (4 - half, y), (4 + half, y), 1)
+
+    # Tip highlight
+    pygame.draw.circle(s, _SBL, (4, 49), 1)
+
+    # Outline
+    pygame.draw.polygon(s, _SO, [(0, 0), (w, 0), (6, 44), (4, 50), (2, 44)], 1)
+    return s
+
+
+def _slime_leg() -> pygame.Surface:
+    """10×50 px pseudopod leg, attachment at top, drip tip at bottom."""
+    w, h = 10, 50
+    s = _blank(w, h)
+
+    # Slightly wider pseudopod than arm
+    pygame.draw.polygon(s, _SB, [(0, 0), (w, 0), (7, 44), (5, 50), (3, 44)])
+
+    # Highlight strip
+    pygame.draw.polygon(s, _SBL, [(1, 1), (5, 1), (4, 20), (1, 20)])
+
+    # Segment rings
+    for y in range(10, 44, 10):
+        half = max(1, int(4 - y * 0.03))
+        pygame.draw.line(s, _SBD, (5 - half, y), (5 + half, y), 1)
+
+    # Tip highlight
+    pygame.draw.circle(s, _SBL, (5, 49), 1)
+
+    # Outline
+    pygame.draw.polygon(s, _SO, [(0, 0), (w, 0), (7, 44), (5, 50), (3, 44)], 1)
     return s
