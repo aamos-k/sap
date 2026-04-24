@@ -67,7 +67,14 @@ class CaveGrid:
                 if dx == 0 and dy == 0:
                     continue
                 yield tx + dx, ty + dy
-
+                
+    def extend_down(self, extra_rows: int) -> None:
+        """Append *extra_rows* solid rows at the bottom of the grid."""
+        import numpy as np
+        new_rows = np.zeros((extra_rows, self.width), dtype=np.uint8)
+        self.tiles = np.vstack([self.tiles, new_rows])
+        self.height += extra_rows
+        
     def snap_to_open(self, tx: int, ty: int) -> tuple[int, int] | None:
         """BFS to nearest open tile from (tx, ty)."""
         from collections import deque
