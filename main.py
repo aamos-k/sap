@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
 """Cave exploration game — entry point."""
 import sys
+import random
 import pygame
 from game.world import World
 from rendering.renderer import Renderer
 from input.handler import InputHandler
 
 SCREEN_W, SCREEN_H = 1280, 720
-FPS = 60
+FPS   = 60
 TITLE = "Cave Crawler"
 
 
-def run(seed: int = 0) -> None:
+def run(seed: int | None = None) -> None:
+    if seed is None:
+        seed = random.randrange(0, 2 ** 31)
+
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
     pygame.display.set_caption(TITLE)
     clock = pygame.time.Clock()
 
-    world = World(seed=seed)
+    world    = World(seed=seed)
     renderer = Renderer(screen, world)
-    handler = InputHandler(world, renderer.hud)
+    handler  = InputHandler(world, renderer.hud)
 
     running = True
     while running:
@@ -29,11 +33,10 @@ def run(seed: int = 0) -> None:
                 break
             restart = handler.process_event(event)
             if restart:
-                # Re-create world with new random seed
-                seed += 1
-                world = World(seed=seed)
+                seed  = random.randrange(0, 2 ** 31)
+                world    = World(seed=seed)
                 renderer = Renderer(screen, world)
-                handler = InputHandler(world, renderer.hud)
+                handler  = InputHandler(world, renderer.hud)
                 break
 
         world.tick()
@@ -47,6 +50,7 @@ def run(seed: int = 0) -> None:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=TITLE)
-    parser.add_argument("--seed", type=int, default=0, help="Cave generation seed")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Cave generation seed (random if omitted)")
     args = parser.parse_args()
     run(seed=args.seed)
