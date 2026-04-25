@@ -66,13 +66,13 @@ def generate_extension(grid: CaveGrid, rng: random.Random,
     # Carve connector shafts from old cave floor through the seam
     for sx in starts:
         for dy in range(floor_y, seam_y + 6):
-            grid.carve_circle(sx, dy, radius=1)
+            grid.carve_circle(sx, dy, radius=2)
 
     # Grow cave arms from just below the seam
     for sx in starts:
         _carve_arm(grid, rng, sx, seam_y + 4,
                    angle=_DOWN + rng.uniform(-0.35, 0.35),
-                   depth=1, max_depth=4,
+                   depth=1, max_depth=2,
                    room_centres=room_centres)
 
     # Prune unreachable tiles using the first open cell in the top rows
