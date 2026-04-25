@@ -43,22 +43,34 @@ def generate_extension(grid: CaveGrid, rng: random.Random,
     Call *after* grid.extend_down(extension_height).  Connects arms from open
     tiles near the seam and prunes orphan tiles.
     """
-    seam_y = grid.height - extension_height - 4
+    seam_y = grid.height - extension_height
     seam_y = max(2, seam_y)
 
-    # Find open tiles near the seam to use as arm anchors
-    open_xs = [tx for tx in range(3, grid.width - 3)
-               if grid.is_open(tx, seam_y)]
+    # Scan upward from the seam to find open tiles at the old cave's floor
+    floor_y = seam_y - 1
+    open_xs: list[int] = []
+    for scan_y in range(floor_y, max(2, floor_y - 20), -1):
+        open_xs = [tx for tx in range(3, grid.width - 3)
+                   if grid.is_open(tx, scan_y)]
+        if open_xs:
+            floor_y = scan_y
+            break
 
     if not open_xs:
         open_xs = [grid.width // 2]
 
-    # Pick up to 3 evenly-spaced start points for variety
+    # Pick up to 3 evenly-spaced connection points for variety
     step = max(1, len(open_xs) // 3)
     starts = open_xs[::step][:3]
 
+    # Carve connector shafts from old cave floor through the seam
     for sx in starts:
-        _carve_arm(grid, rng, sx, seam_y,
+        for dy in range(floor_y, seam_y + 6):
+            grid.carve_circle(sx, dy, radius=1)
+
+    # Grow cave arms from just below the seam
+    for sx in starts:
+        _carve_arm(grid, rng, sx, seam_y + 4,
                    angle=_DOWN + rng.uniform(-0.35, 0.35),
                    depth=1, max_depth=4,
                    room_centres=room_centres)
