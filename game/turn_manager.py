@@ -9,6 +9,7 @@ from entities.enemy import Enemy
 class TurnState(Enum):
     PLAYER_SELECT_LIMB   = auto()
     PLAYER_SELECT_TARGET = auto()
+    PLAYER_SELECT_THROW  = auto()
     PLAYER_RESOLVE       = auto()
     ENEMY_THINK          = auto()
     ENEMY_RESOLVE        = auto()
@@ -35,6 +36,15 @@ class TurnManager:
     def cancel_selection(self) -> None:
         self.selected_limb = None
         self.state = TurnState.PLAYER_SELECT_LIMB
+
+    def start_throw(self) -> None:
+        if self.state == TurnState.PLAYER_SELECT_LIMB:
+            self.selected_limb = None
+            self.state = TurnState.PLAYER_SELECT_THROW
+
+    def cancel_throw(self) -> None:
+        if self.state == TurnState.PLAYER_SELECT_THROW:
+            self.state = TurnState.PLAYER_SELECT_LIMB
 
     def commit_player_move(self) -> None:
         self.state = TurnState.PLAYER_RESOLVE

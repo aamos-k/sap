@@ -2,6 +2,7 @@ from __future__ import annotations
 import pygame
 from entities.limb import LimbId, LIMB_LABELS, LIMB_KEYS
 from game.turn_manager import TurnManager, TurnState
+from entities.spear import Spear
 
 FONT_SIZE_LARGE  = 20
 FONT_SIZE_SMALL  = 14
@@ -33,18 +34,23 @@ class HUD:
 
         # Pre-compute button rects (bottom-left)
         self.btn_rects: dict[LimbId, pygame.Rect] = {}
-        total_w = len(LIMB_ORDER) * BTN_W + (len(LIMB_ORDER) - 1) * BTN_GAP
         start_x = BTN_MARGIN_X
         y = screen_h - BTN_MARGIN_Y - BTN_H
         for i, lid in enumerate(LIMB_ORDER):
             x = start_x + i * (BTN_W + BTN_GAP)
             self.btn_rects[lid] = pygame.Rect(x, y, BTN_W, BTN_H)
 
+        # Spear throw button — sits to the right of the limb buttons
+        spear_x = (start_x + len(LIMB_ORDER) * (BTN_W + BTN_GAP) + BTN_GAP * 2)
+        self._spear_btn_rect = pygame.Rect(spear_x, y, BTN_W + 8, BTN_H)
+
     def draw(self, screen: pygame.Surface, tm: TurnManager,
-             mouse_pos: tuple[int, int], seed: int = 0) -> None:
+             mouse_pos: tuple[int, int], seed: int = 0,
+             spear: Spear | None = None) -> None:
         self._draw_turn_label(screen, tm)
         self._draw_limb_buttons(screen, tm, mouse_pos)
-        self._draw_instructions(screen, tm)
+        self._draw_spear_button(screen, tm, mouse_pos, spear)
+        self._draw_instructions(screen, tm, spear)
         self._draw_flash(screen, tm)
         self._draw_seed(screen, seed)
         if tm.state == TurnState.GAME_OVER:
@@ -90,12 +96,47 @@ class HUD:
             screen.blit(t1, (rect.x + 8, rect.y + 4))
             screen.blit(t2, (rect.x + 6, rect.y + 22))
 
-    def _draw_instructions(self, screen: pygame.Surface, tm: TurnManager) -> None:
+    def _draw_spear_button(self, screen: pygame.Surface, tm: TurnManager,
+                           mouse_pos: tuple[int, int],
+                           spear: Spear | None) -> None:
+        rect = self._spear_btn_rect
+        active = (tm.state == TurnState.PLAYER_SELECT_LIMB and
+                  spear is not None and spear.held)
+        selected = tm.state == TurnState.PLAYER_SELECT_THROW
+
+        if selected:
+            col = (180, 60, 30)
+        elif active:
+            col = BTN_NORMAL if not rect.collidepoint(mouse_pos) else BTN_HOVER
+        else:
+            col = (30, 30, 40)
+
+        pygame.draw.rect(screen, col, rect, border_radius=4)
+        pygame.draw.rect(screen, BTN_BORDER, rect, 1, border_radius=4)
+
+        label_col = BTN_TEXT if active or selected else (80, 80, 80)
+        key_col   = (150, 150, 150) if active or selected else (50, 50, 50)
+        t1 = self.font_large.render("SPEAR", True, label_col)
+        t2 = self.font_small.render("[T]", True, key_col)
+        screen.blit(t1, (rect.x + 4, rect.y + 4))
+        screen.blit(t2, (rect.x + 12, rect.y + 22))
+
+        if spear is not None and not spear.held and not spear.in_flight:
+            # Spear is on the ground — show a small "retrieve" hint dot
+            pygame.draw.circle(screen, (255, 220, 80),
+                               (rect.right - 8, rect.top + 8), 4)
+
+    def _draw_instructions(self, screen: pygame.Surface, tm: TurnManager,
+                           spear: Spear | None = None) -> None:
         if tm.state == TurnState.PLAYER_SELECT_LIMB:
-            msg = "Select a limb (buttons or 1-4)  |  ESC = cancel"
+            held = spear is not None and spear.held
+            spear_hint = "  |  [T] throw spear" if held else ""
+            msg = f"Select a limb (buttons or 1-4)  |  ESC = cancel{spear_hint}"
         elif tm.state == TurnState.PLAYER_SELECT_TARGET:
             lbl = LIMB_LABELS.get(tm.selected_limb, "?")
             msg = f"Moving {lbl} — click target in cave  |  ESC = cancel"
+        elif tm.state == TurnState.PLAYER_SELECT_THROW:
+            msg = "Click to throw spear  |  ESC = cancel"
         elif tm.state in (TurnState.ENEMY_THINK, TurnState.ENEMY_RESOLVE):
             msg = "Enemy is thinking..."
         else:
@@ -141,3 +182,6 @@ class HUD:
             if rect.collidepoint(pos):
                 return lid
         return None
+
+    def hit_test_spear_button(self, pos: tuple[int, int]) -> bool:
+        return self._spear_btn_rect.collidepoint(pos)

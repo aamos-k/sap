@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import pygame
 from game.world import World
 from game.turn_manager import TurnState
@@ -18,6 +19,11 @@ _BAG_HILIT  = (185, 148,  72)
 _COIN_GOLD   = (255, 215,   0)
 _COIN_BRIGHT = (255, 244, 120)
 _COIN_SHADOW = (175, 140,   0)
+
+# Spear colours
+_SPEAR_SHAFT = (180, 140,  70)
+_SPEAR_TIP   = (200, 200, 220)
+_SPEAR_GLOW  = (255, 220,  80)   # ring when on ground (retrievable)
 
 
 class Renderer:
@@ -42,6 +48,9 @@ class Renderer:
         # Draw loot bags and loose coins (below characters)
         self._draw_bags(screen, camera)
 
+        # Draw spear in world space (when not held)
+        self._draw_spear(screen, camera)
+
         # Draw reach indicator when player is selecting a target
         if tm.state == TurnState.PLAYER_SELECT_TARGET and tm.selected_limb is not None:
             limb = world.player.get_limb(tm.selected_limb)
@@ -57,8 +66,28 @@ class Renderer:
         for entity in world.entities:
             draw_character(screen, camera, entity, tm)
 
-        self.hud.draw(screen, tm, mouse_pos, seed=world.seed)
+        self.hud.draw(screen, tm, mouse_pos, seed=world.seed, spear=world.spear)
         pygame.display.flip()
+
+    def _draw_spear(self, screen: pygame.Surface, camera) -> None:
+        spear = self.world.spear
+        if spear.held:
+            return
+        sx, sy = camera.world_to_screen(spear.x, spear.y)
+        if spear.in_flight:
+            angle = math.atan2(spear.vy, spear.vx)
+        else:
+            angle = 0.4  # slight lean when resting on ground
+        half = max(10, int(14 * camera.zoom))
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        tail = (sx - int(cos_a * half), sy - int(sin_a * half))
+        tip  = (sx + int(cos_a * half), sy + int(sin_a * half))
+        pygame.draw.line(screen, _SPEAR_SHAFT, tail, tip, max(2, int(3 * camera.zoom)))
+        pygame.draw.circle(screen, _SPEAR_TIP, tip, max(2, int(3 * camera.zoom)))
+        # Glow ring when resting on ground — signals it can be retrieved
+        if not spear.in_flight:
+            pygame.draw.circle(screen, _SPEAR_GLOW, (sx, sy),
+                               max(8, int(10 * camera.zoom)), 1)
 
     def _draw_bags(self, screen: pygame.Surface, camera) -> None:
         for bag in self.world.bags:
