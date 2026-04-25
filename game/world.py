@@ -14,9 +14,10 @@ from game.turn_manager import TurnManager, TurnState
 from game.ga import evolve, enemy_fitness
 from rendering.camera import Camera
 
-ENEMY_THINK_TICKS = 18
-TILE_SIZE         = 16
-_DT               = 1.0 / 60
+ENEMY_THINK_TICKS  = 18
+TILE_SIZE          = 16
+_DT                = 1.0 / 60
+_ROPE_ARRIVE_DIST  = 24.0   # px: body this close to a waypoint counts as reached
 
 _EXTEND_TRIGGER_PX = 30 * 16   # 30 tiles from grid bottom triggers extension
 _EXTENSION_TILES   = 160        # tile-rows added per extension
@@ -66,6 +67,9 @@ class World:
         self._spawn_bags_in_rooms(room_centres)
 
         self.spear = Spear(x=self.player.body_x, y=self.player.body_y)
+
+        self.rope_points: list[tuple[float, float]] = []
+        self._rope_index: int = 0
 
         self.turn_manager = TurnManager(player=self.player, enemies=self.enemies)
         self.camera = Camera(
@@ -245,6 +249,92 @@ class World:
             tm.set_flash("No spear!")
             return False
         self.spear.throw(self.player.body_x, self.player.body_y, target_wx, target_wy)
+        tm.advance_to_enemy()
+        return True
+
+    # ── rope waypoint system ──────────────────────────────────────────────────
+
+    def add_rope_point(self, wx: float, wy: float) -> None:
+        self.rope_points.append((wx, wy))
+
+    def undo_rope_point(self) -> None:
+        if self.rope_points:
+            self.rope_points.pop()
+            if self._rope_index > len(self.rope_points):
+                self._rope_index = len(self.rope_points)
+
+    def clear_rope(self) -> None:
+        self.rope_points.clear()
+        self._rope_index = 0
+
+    def rope_step(self) -> bool:
+        """Auto-move one limb toward the next rope waypoint. Returns True if a step was taken."""
+        import math
+        tm = self.turn_manager
+        player = self.player
+
+        # Advance past already-reached waypoints
+        while self._rope_index < len(self.rope_points):
+            tx, ty = self.rope_points[self._rope_index]
+            if math.hypot(player.body_x - tx, player.body_y - ty) < _ROPE_ARRIVE_DIST:
+                self._rope_index += 1
+            else:
+                break
+
+        if self._rope_index >= len(self.rope_points):
+            tm.set_flash("End of rope!")
+            return False
+
+        target_x, target_y = self.rope_points[self._rope_index]
+        dx = target_x - player.body_x
+        dy = target_y - player.body_y
+        dist = math.hypot(dx, dy)
+        if dist < 1.0:
+            return False
+        ndx, ndy = dx / dist, dy / dist
+
+        # Pick the limb most "behind" in the direction of travel
+        best_lid = None
+        worst_proj = float('inf')
+        for lid, limb in player.limbs.items():
+            proj = ((limb.tip_x - player.body_x) * ndx +
+                    (limb.tip_y - player.body_y) * ndy)
+            if proj < worst_proj:
+                worst_proj = proj
+                best_lid = lid
+
+        if best_lid is None:
+            return False
+
+        limb = player.get_limb(best_lid)
+        reach = limb.length * 0.85
+        limb.tip_x = player.body_x + ndx * reach
+        limb.tip_y = player.body_y + ndy * reach
+
+        clamp_limb_to_open(limb, self.grid)
+        resolve_anchoring(limb, self.grid)
+        player.compute_body_position()
+        self._maybe_extend_cave()
+        apply_gravity(player, self.grid)
+
+        check_collision_damage(player, [e for e in self.enemies
+                                        if not isinstance(e, SlimeMold)])
+        for enemy in self.enemies:
+            if isinstance(enemy, SlimeMold) and enemy.alive:
+                from game.physics import HIT_RADIUS  # noqa: F401
+                for limb_obj in player.limbs.values():
+                    if enemy.overlaps_body(limb_obj.tip_x, limb_obj.tip_y):
+                        enemy.take_damage(1)
+                        break
+
+        if self.enemies and all(not e.alive for e in self.enemies):
+            tm.set_game_over("player")
+            return False
+
+        if not player.alive:
+            tm.set_game_over("enemy")
+            return False
+
         tm.advance_to_enemy()
         return True
 

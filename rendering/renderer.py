@@ -9,6 +9,13 @@ from rendering.hud import HUD
 
 BG = (12, 10, 14)
 
+# Rope colours
+_ROPE_LINE_PENDING  = (200, 160,  70)
+_ROPE_LINE_DONE     = ( 90,  70,  35)
+_ROPE_PT_CURRENT    = (255, 210,  50)
+_ROPE_PT_PENDING    = (200, 160,  70)
+_ROPE_PT_DONE       = ( 90,  70,  35)
+
 # Loot bag colours
 _BAG_BODY   = (139, 100,  45)
 _BAG_DARK   = ( 90,  58,  18)
@@ -44,6 +51,9 @@ class Renderer:
 
         screen.fill(BG)
         self.cave_renderer.draw(screen, camera)
+
+        # Draw rope waypoints (below characters)
+        self._draw_rope(screen, camera)
 
         # Draw loot bags and loose coins (below characters)
         self._draw_bags(screen, camera)
@@ -101,6 +111,31 @@ class Renderer:
         if not spear.in_flight:
             pygame.draw.circle(screen, _SPEAR_GLOW, (sx, sy),
                                max(8, int(10 * camera.zoom)), 1)
+
+    def _draw_rope(self, screen: pygame.Surface, camera) -> None:
+        world = self.world
+        rope = world.rope_points
+        if not rope:
+            return
+        rope_idx = world._rope_index
+
+        # Lines between consecutive waypoints
+        for i in range(len(rope) - 1):
+            x1, y1 = camera.world_to_screen(*rope[i])
+            x2, y2 = camera.world_to_screen(*rope[i + 1])
+            col = _ROPE_LINE_DONE if i < rope_idx else _ROPE_LINE_PENDING
+            pygame.draw.line(screen, col, (int(x1), int(y1)), (int(x2), int(y2)), 2)
+
+        # Point markers
+        for i, pt in enumerate(rope):
+            sx, sy = int(camera.world_to_screen(*pt)[0]), int(camera.world_to_screen(*pt)[1])
+            if i < rope_idx:
+                pygame.draw.circle(screen, _ROPE_PT_DONE, (sx, sy), 3)
+            elif i == rope_idx:
+                pygame.draw.circle(screen, _ROPE_PT_CURRENT, (sx, sy), 6)
+                pygame.draw.circle(screen, (255, 255, 200), (sx, sy), 6, 1)
+            else:
+                pygame.draw.circle(screen, _ROPE_PT_PENDING, (sx, sy), 4)
 
     def _draw_bags(self, screen: pygame.Surface, camera) -> None:
         for bag in self.world.bags:

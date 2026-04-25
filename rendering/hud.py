@@ -87,7 +87,7 @@ class HUD:
 
     def _draw_turn_label(self, screen: pygame.Surface, tm: TurnManager) -> None:
         if tm.state in (TurnState.PLAYER_SELECT_LIMB, TurnState.PLAYER_SELECT_TARGET,
-                        TurnState.PLAYER_RESOLVE):
+                        TurnState.PLAYER_RESOLVE, TurnState.ROPE_PLACE):
             text = f"Turn {tm.turn_number}  PLAYER"
             colour = (100, 200, 255)
         elif tm.state in (TurnState.ENEMY_THINK, TurnState.ENEMY_RESOLVE):
@@ -227,12 +227,14 @@ class HUD:
         if tm.state == TurnState.PLAYER_SELECT_LIMB:
             held = spear is not None and spear.held
             spear_hint = "  |  [T] throw spear" if held else ""
-            msg = f"Select a limb (buttons or 1-4)  |  ESC = cancel{spear_hint}"
+            msg = f"Select a limb (1-4)  |  [R] rope  |  [F] rope step  |  [X] clear rope{spear_hint}"
         elif tm.state == TurnState.PLAYER_SELECT_TARGET:
             lbl = LIMB_LABELS.get(tm.selected_limb, "?")
             msg = f"Moving {lbl} — click target in cave  |  ESC = cancel"
         elif tm.state == TurnState.PLAYER_SELECT_THROW:
             msg = "Click to throw spear  |  ESC = cancel"
+        elif tm.state == TurnState.ROPE_PLACE:
+            msg = "Rope: click to add waypoint  |  [X] undo  |  [R]/ESC = done"
         elif tm.state in (TurnState.ENEMY_THINK, TurnState.ENEMY_RESOLVE):
             msg = "Enemy is thinking..."
         else:
