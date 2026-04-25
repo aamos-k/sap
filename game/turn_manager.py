@@ -14,6 +14,7 @@ class TurnState(Enum):
     ENEMY_THINK          = auto()
     ENEMY_RESOLVE        = auto()
     GAME_OVER            = auto()
+    ROPE_PLACE           = auto()   # placing rope waypoints
 
 
 @dataclass
@@ -44,6 +45,14 @@ class TurnManager:
 
     def cancel_throw(self) -> None:
         if self.state == TurnState.PLAYER_SELECT_THROW:
+            self.state = TurnState.PLAYER_SELECT_LIMB
+
+    def start_rope_place(self) -> None:
+        if self.state == TurnState.PLAYER_SELECT_LIMB:
+            self.state = TurnState.ROPE_PLACE
+
+    def stop_rope_place(self) -> None:
+        if self.state == TurnState.ROPE_PLACE:
             self.state = TurnState.PLAYER_SELECT_LIMB
 
     def commit_player_move(self) -> None:

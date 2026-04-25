@@ -31,6 +31,8 @@ class InputHandler:
                     tm.cancel_selection()
                 elif tm.state == TurnState.PLAYER_SELECT_THROW:
                     tm.cancel_throw()
+                elif tm.state == TurnState.ROPE_PLACE:
+                    tm.stop_rope_place()
                 return False
 
             if event.key == pygame.K_t:
@@ -40,8 +42,32 @@ class InputHandler:
                     tm.cancel_throw()
                 return False
 
-            if event.key == pygame.K_r and tm.state == TurnState.GAME_OVER:
-                return True  # signal restart
+            if event.key == pygame.K_r:
+                if tm.state == TurnState.GAME_OVER:
+                    return True  # signal restart
+                if tm.state == TurnState.PLAYER_SELECT_LIMB:
+                    tm.start_rope_place()
+                    return False
+                if tm.state == TurnState.ROPE_PLACE:
+                    tm.stop_rope_place()
+                    return False
+
+            # [F] — take one semi-automatic step along the rope
+            if event.key == pygame.K_f and tm.state == TurnState.PLAYER_SELECT_LIMB:
+                if world.rope_points:
+                    world.rope_step()
+                else:
+                    tm.set_flash("No rope! Press R to place waypoints.")
+                return False
+
+            # [X] — undo last rope point (in place mode) or clear all (select mode)
+            if event.key == pygame.K_x:
+                if tm.state == TurnState.ROPE_PLACE:
+                    world.undo_rope_point()
+                elif tm.state == TurnState.PLAYER_SELECT_LIMB:
+                    world.clear_rope()
+                    tm.set_flash("Rope cleared.")
+                return False
 
             # Shop purchases (only when in the shop and it's the player's turn)
             if world.player_in_shop and tm.state == TurnState.PLAYER_SELECT_LIMB:
@@ -78,6 +104,11 @@ class InputHandler:
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             pos = event.pos
+
+            if tm.state == TurnState.ROPE_PLACE:
+                wx, wy = camera.screen_to_world(*pos)
+                world.add_rope_point(wx, wy)
+                return False
 
             if tm.state == TurnState.PLAYER_SELECT_LIMB:
                 if self.hud.hit_test_spear_button(pos) and world.spear.held:
