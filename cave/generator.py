@@ -30,8 +30,6 @@ def generate_cave(width: int = 400, height: int = 200,
 
     _flood_fill_prune(grid, bulb_cx, bulb_cy)
 
-    _seal_border(grid)
-
     return grid, (bulb_cx, bulb_cy), room_centres
 
 
