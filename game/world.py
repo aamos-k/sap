@@ -227,7 +227,7 @@ class World:
         self._extension_count += 1
         self.cave_dirty = True
 
-        self._spawn_enemies_in_rooms(new_rooms, skip_first=0)
+        self._spawn_enemies_in_rooms(new_rooms, skip_first=1)
         self._spawn_bags_in_rooms(new_rooms)
 
     # ── spawning helpers ──────────────────────────────────────────────────────
