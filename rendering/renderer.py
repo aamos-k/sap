@@ -66,7 +66,20 @@ class Renderer:
         for entity in world.entities:
             draw_character(screen, camera, entity, tm)
 
-        self.hud.draw(screen, tm, mouse_pos, seed=world.seed, spear=world.spear)
+        self.hud.draw(
+            screen, tm, mouse_pos,
+            seed=world.seed,
+            spear=world.spear,
+            depth_tiles=world.depth_tiles,
+            coins=world.coins,
+            player_in_shop=world.player_in_shop,
+            player_hp=world.player.hp,
+            player_max_hp=world.player.max_hp,
+            hp_upgrade_cost=world.hp_upgrade_cost,
+            reach_upgrade_cost=world.reach_upgrade_cost,
+            generation=world.generation,
+            total_deaths=world.total_deaths,
+        )
         pygame.display.flip()
 
     def _draw_spear(self, screen: pygame.Surface, camera) -> None:
