@@ -16,9 +16,9 @@ ENEMY_THINK_TICKS = 18
 TILE_SIZE         = 16
 _DT               = 1.0 / 60
 
-# Extend the cave when the player is this many world-pixels above the grid bottom
-_EXTEND_TRIGGER_PX = 720 * 4
-_EXTENSION_TILES   = 160   # tile-rows added per extension
+# Extend the cave when the player is this close to the grid bottom
+_EXTEND_TRIGGER_PX = 30 * 16   # 30 tiles
+_EXTENSION_TILES   = 160        # tile-rows added per extension
 
 
 class World:
@@ -30,7 +30,7 @@ class World:
         # flag read by CaveRenderer to detect grid growth
         self.cave_dirty = False
 
-        grid, bulb, room_centres = generate_cave(width=400, height=200, seed=seed)
+        grid, bulb, room_centres = generate_cave(width=400, height=80, seed=seed)
         self.grid: CaveGrid = grid
 
         bx, by = grid.tile_to_world(*bulb)
@@ -101,6 +101,7 @@ class World:
         clamp_limb_to_open(limb, self.grid)
         resolve_anchoring(limb, self.grid)
         self.player.compute_body_position()
+        self._maybe_extend_cave()
         apply_gravity(self.player, self.grid)
 
         # Limb-based damage against regular enemies

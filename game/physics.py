@@ -4,8 +4,6 @@ from entities.limb import Limb, LimbId
 from entities.character import Character
 from cave.grid import CaveGrid
 
-GRAVITY = 2          # tiles per turn
-TERMINAL_VEL = 20    # tiles per turn cap
 HIT_RADIUS = 14      # pixels — limb tip hits if closer than this to enemy body
 BODY_RADIUS = 8      # pixels — collision radius of the body circle
 
@@ -35,38 +33,29 @@ def would_anchor(limb_id: LimbId, wx: float, wy: float, grid: CaveGrid) -> bool:
 
 
 def apply_gravity(character: Character, grid: CaveGrid) -> None:
-    """Apply gravity to character if no limbs are anchored."""
+    """Instantly drop character to the floor directly below if unanchored."""
     if character.anchored_count() > 0:
         character.vel_y = 0.0
         return
 
     ts = grid.TILE_SIZE
-    character.vel_y = min(character.vel_y + GRAVITY * ts, TERMINAL_VEL * ts)
+    btx, start_ty = grid.world_to_tile(character.body_x, character.body_y + BODY_RADIUS)
 
-    # Sweep downward in BODY_RADIUS-sized steps so fast falls never tunnel
-    # through floors.  Step (8 px) < TILE_SIZE (16 px), so any 1-tile-thick
-    # floor is guaranteed to be detected before the body centre crosses it.
-    step = BODY_RADIUS
-    remaining = character.vel_y          # always ≥ 0; gravity is downward only
-    new_y = character.body_y
-
-    while remaining > 0:
-        advance = min(step, remaining)
-        candidate = new_y + advance
-        btx, bty = grid.world_to_tile(character.body_x, candidate + BODY_RADIUS)
-        if grid.is_solid(btx, bty):
-            new_y = bty * ts - BODY_RADIUS  # snap body flush above tile top
-            character.vel_y = 0.0
-            remaining = 0
+    floor_ty = grid.height  # default: grid bottom (is_solid returns True out-of-bounds)
+    for ty in range(start_ty, grid.height):
+        if grid.is_solid(btx, ty):
+            floor_ty = ty
             break
-        new_y = candidate
-        remaining -= advance
 
+    new_y = floor_ty * ts - BODY_RADIUS
     actual_dy = new_y - character.body_y
-    character.body_y = new_y
 
-    # Drag unanchored limb tips and immediately clamp them back to open space
-    # so they never end up stuck inside rock (which would block re-anchoring).
+    if actual_dy <= 0:
+        return
+
+    character.body_y = new_y
+    character.vel_y = 0.0
+
     for limb in character.limbs.values():
         if not limb.anchored:
             limb.tip_y += actual_dy
