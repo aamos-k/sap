@@ -10,6 +10,9 @@ DEFAULT_GENES: dict[str, float] = {
     'stability_weight': 2.0,    # bonus per other already-anchored limb
     'reach_min':        0.3,    # minimum reach as fraction of limb length
     'candidates':       24.0,   # candidate positions evaluated per move
+    'weight':           1.0,    # heavier = more HP, slower movement
+    'nail_length':      1.0,    # longer nails = greater hit range and damage
+    'appendages':       1.0,    # more appendages = faster, but less HP and damage
 }
 
 GENE_BOUNDS: dict[str, tuple[float, float]] = {
@@ -19,6 +22,9 @@ GENE_BOUNDS: dict[str, tuple[float, float]] = {
     'stability_weight': (0.0,    6.0),
     'reach_min':        (0.10,   0.90),
     'candidates':       (8.0,   64.0),
+    'weight':           (0.5,   3.0),
+    'nail_length':      (0.5,   3.0),
+    'appendages':       (1.0,   4.0),
 }
 
 
