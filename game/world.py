@@ -264,14 +264,18 @@ class World:
                         return
                 continue
 
-            lid, wx, wy = enemy.choose_move(
-                self.grid, self.player.body_x, self.player.body_y, self._rng)
-            limb = enemy.get_limb(lid)
-            limb.tip_x, limb.tip_y = wx, wy
-            clamp_limb_to_open(limb, self.grid)
-            resolve_anchoring(limb, self.grid)
-            enemy.compute_body_position()
-            apply_gravity(enemy, self.grid)
+            # Heavier enemies act less frequently; advance their ticker each cycle
+            enemy._move_ticker += 1
+            if enemy._move_ticker >= enemy.move_every:
+                enemy._move_ticker = 0
+                lid, wx, wy = enemy.choose_move(
+                    self.grid, self.player.body_x, self.player.body_y, self._rng)
+                limb = enemy.get_limb(lid)
+                limb.tip_x, limb.tip_y = wx, wy
+                clamp_limb_to_open(limb, self.grid)
+                resolve_anchoring(limb, self.grid)
+                enemy.compute_body_position()
+                apply_gravity(enemy, self.grid)
 
             player_hp_before = self.player.hp
             check_collision_damage(enemy, [self.player])

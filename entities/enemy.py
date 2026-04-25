@@ -7,12 +7,17 @@ from cave.grid import CaveGrid
 from game.ga import DEFAULT_GENES
 
 NUM_CANDIDATES = 24
+_BASE_HIT_RADIUS = 14  # mirrors physics.HIT_RADIUS
 
 
 class Enemy(Character):
     # Extra fields set in create() — not dataclass fields
     genes: dict[str, float]
     damage_dealt: int
+    move_every: int      # act every N think-cycles (weight slows, appendages speed up)
+    _move_ticker: int    # counts up each cycle; resets when it reaches move_every
+    hit_radius: float    # derived from nail_length
+    hit_damage: int      # derived from nail_length and appendages
 
     @classmethod
     def create(cls, wx: float, wy: float,
@@ -22,6 +27,28 @@ class Enemy(Character):
         e.__dict__.update(c.__dict__)
         e.genes = dict(DEFAULT_GENES) if genes is None else dict(genes)
         e.damage_dealt = 0
+
+        weight      = e.genes['weight']
+        nail_length = e.genes['nail_length']
+        appendages  = e.genes['appendages']
+
+        # HP: weight adds bulk, extra appendages cost health
+        e.max_hp = max(1, 10 + round((weight - 1.0) * 2.0) - int(appendages - 1.0))
+        e.hp = e.max_hp
+
+        # Speed: heavier enemies act less often; appendages partially offset this
+        base_interval  = max(1, round(weight))
+        speed_bonus    = int(appendages - 1.0)
+        e.move_every   = max(1, base_interval - speed_bonus)
+        e._move_ticker = 0
+
+        # Hit radius grows with nail length
+        e.hit_radius = _BASE_HIT_RADIUS + (nail_length - 1.0) * 8.0
+
+        # Damage: nails deal more, but appendages spread the impact (less per hit)
+        appendage_modifier = max(0.3, 1.0 - (appendages - 1.0) * 0.15)
+        e.hit_damage = max(1, round(nail_length * appendage_modifier))
+
         return e
 
     def choose_move(self, grid: CaveGrid, player_x: float, player_y: float,

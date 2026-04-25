@@ -73,14 +73,20 @@ def clamp_limb_to_open(limb: Limb, grid: CaveGrid) -> None:
 
 
 def check_collision_damage(attacker: Character, targets: list[Character]) -> None:
-    """Deal 1 damage to any target whose body is within HIT_RADIUS of an attacker limb tip."""
+    """Deal damage to any target within the attacker's hit radius of a limb tip.
+
+    Enemies carry per-instance hit_radius and hit_damage derived from their
+    nail_length and appendages genes; the player falls back to the global defaults.
+    """
+    radius = getattr(attacker, 'hit_radius', HIT_RADIUS)
+    damage = getattr(attacker, 'hit_damage', 1)
     for limb in attacker.limbs.values():
         for target in targets:
             if not target.alive:
                 continue
             dist = math.hypot(limb.tip_x - target.body_x, limb.tip_y - target.body_y)
-            if dist < HIT_RADIUS:
-                target.take_damage(1)
+            if dist < radius:
+                target.take_damage(damage)
 
 
 def validate_limb_move(character: Character, limb: Limb, target_wx: float, target_wy: float) -> bool:
