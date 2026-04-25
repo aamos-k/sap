@@ -6,6 +6,7 @@ from entities.player import Player
 from entities.enemy import Enemy
 from entities.slime_mold import SlimeMold
 from entities.loot_bag import LootBag
+from entities.spear import Spear, SPEAR_DAMAGE
 from entities.limb import LimbId
 from game.physics import (resolve_anchoring, apply_gravity,
                            clamp_limb_to_open, check_collision_damage)
@@ -48,6 +49,8 @@ class World:
         self.bags: list[LootBag] = []
         self._spawn_bags_in_rooms(room_centres)
 
+        self.spear = Spear(x=self.player.body_x, y=self.player.body_y)
+
         self.turn_manager = TurnManager(player=self.player, enemies=self.enemies)
         self.camera = Camera(
             x=self.player.body_x - 640,
@@ -80,6 +83,7 @@ class World:
         self._step_slimes()
 
         self._update_bags()
+        self._update_spear()
         self._maybe_extend_cave()
         self.camera.follow(self.player.body_x, self.player.body_y)
 
@@ -122,6 +126,15 @@ class World:
                 tm.set_game_over("player")
                 return True
 
+        tm.advance_to_enemy()
+        return True
+
+    def apply_throw(self, target_wx: float, target_wy: float) -> bool:
+        tm = self.turn_manager
+        if not self.spear.held:
+            tm.set_flash("No spear!")
+            return False
+        self.spear.throw(self.player.body_x, self.player.body_y, target_wx, target_wy)
         tm.advance_to_enemy()
         return True
 
@@ -177,6 +190,27 @@ class World:
         for bag in self.bags:
             bag.check_spill(tips)
             bag.update(self.grid, _DT)
+
+    # ── spear physics & retrieval ─────────────────────────────────────────────
+
+    def _update_spear(self) -> None:
+        spear = self.spear
+        spear.update(self.grid, _DT)
+
+        if spear.in_flight:
+            for enemy in self.enemies:
+                if not enemy.alive:
+                    continue
+                if spear.check_hit(enemy):
+                    enemy.take_damage(SPEAR_DAMAGE)
+                    spear.in_flight = False  # embeds in first enemy hit
+                    if all(not e.alive for e in self.enemies):
+                        self.turn_manager.set_game_over("player")
+                    break
+        elif not spear.held:
+            tips = self._player_limb_tips()
+            if spear.check_retrieve(tips):
+                self.turn_manager.set_flash("Spear retrieved!")
 
     # ── infinite cave extension ───────────────────────────────────────────────
 

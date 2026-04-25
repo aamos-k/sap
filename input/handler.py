@@ -29,6 +29,15 @@ class InputHandler:
             if event.key == pygame.K_ESCAPE:
                 if tm.state == TurnState.PLAYER_SELECT_TARGET:
                     tm.cancel_selection()
+                elif tm.state == TurnState.PLAYER_SELECT_THROW:
+                    tm.cancel_throw()
+                return False
+
+            if event.key == pygame.K_t:
+                if tm.state == TurnState.PLAYER_SELECT_LIMB and world.spear.held:
+                    tm.start_throw()
+                elif tm.state == TurnState.PLAYER_SELECT_THROW:
+                    tm.cancel_throw()
                 return False
 
             if event.key == pygame.K_r and tm.state == TurnState.GAME_OVER:
@@ -50,9 +59,16 @@ class InputHandler:
             pos = event.pos
 
             if tm.state == TurnState.PLAYER_SELECT_LIMB:
+                if self.hud.hit_test_spear_button(pos) and world.spear.held:
+                    tm.start_throw()
+                    return False
                 lid = self.hud.hit_test_limb_button(pos)
                 if lid is not None:
                     tm.select_limb(lid)
+
+            elif tm.state == TurnState.PLAYER_SELECT_THROW:
+                wx, wy = camera.screen_to_world(*pos)
+                world.apply_throw(wx, wy)
 
             elif tm.state == TurnState.PLAYER_SELECT_TARGET:
                 # Check if clicking a limb button cancels back
