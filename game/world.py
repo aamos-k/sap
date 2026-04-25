@@ -238,7 +238,7 @@ class World:
             if i < skip_first:
                 continue
             ex, ey = self.grid.tile_to_world(*room_centre)
-            count = self._rng.randint(1, 2)
+            count = 1
             for j in range(count):
                 offset_x = (j - (count - 1) / 2) * 26
                 spawn_x = ex + offset_x
