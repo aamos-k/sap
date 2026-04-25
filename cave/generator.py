@@ -7,7 +7,7 @@ from .grid import CaveGrid
 _DOWN = math.pi / 2  # screen-space downward direction
 
 
-def generate_cave(width: int = 400, height: int = 200,
+def generate_cave(width: int = 400, height: int = 512,
                   seed: int = 0) -> tuple[CaveGrid, tuple[int, int], list[tuple[int, int]]]:
     """
     Returns (grid, bulb_centre_tile, room_centres_tiles).
@@ -35,7 +35,7 @@ def generate_cave(width: int = 400, height: int = 200,
 
 def generate_extension(grid: CaveGrid, rng: random.Random,
                        room_centres: list[tuple[int, int]],
-                       extension_height: int = 150) -> None:
+                       extension_height: int = 512) -> None:
     """
     Carve new cave content into the bottom extension_height rows of grid.
     Call *after* grid.extend_down(extension_height).  Connects arms from open
@@ -77,8 +77,6 @@ def generate_extension(grid: CaveGrid, rng: random.Random,
     seed_tx, seed_ty = _find_first_open(grid)
     if seed_tx is not None:
         _flood_fill_prune(grid, seed_tx, seed_ty)
-
-    _seal_border(grid)
 
 
 # ---------------------------------------------------------------------------
@@ -157,13 +155,6 @@ def _flood_fill_prune(grid: CaveGrid, seed_tx: int, seed_ty: int) -> None:
 
     grid.tiles[~reachable] = 0
 
-
-def _seal_border(grid: CaveGrid) -> None:
-    """Enforce a solid 2-tile border around the entire grid."""
-    grid.tiles[:2, :] = 0
-    grid.tiles[-2:, :] = 0
-    grid.tiles[:, :2] = 0
-    grid.tiles[:, -2:] = 0
 
 
 def _find_first_open(grid: CaveGrid) -> tuple[int | None, int | None]:
