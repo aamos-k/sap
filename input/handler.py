@@ -43,6 +43,27 @@ class InputHandler:
             if event.key == pygame.K_r and tm.state == TurnState.GAME_OVER:
                 return True  # signal restart
 
+            # Shop purchases (only when in the shop and it's the player's turn)
+            if world.player_in_shop and tm.state == TurnState.PLAYER_SELECT_LIMB:
+                if event.key == pygame.K_q:
+                    if world.shop_buy_hp_restore():
+                        tm.set_flash("HP restored!")
+                    else:
+                        tm.set_flash("Can't buy that!")
+                    return False
+                if event.key == pygame.K_e:
+                    if world.shop_buy_max_hp():
+                        tm.set_flash("+2 Max HP!")
+                    else:
+                        tm.set_flash("Not enough coins!")
+                    return False
+                if event.key == pygame.K_z:
+                    if world.shop_buy_reach():
+                        tm.set_flash("+Reach!")
+                    else:
+                        tm.set_flash("Not enough coins!")
+                    return False
+
             # Zoom
             if event.key == pygame.K_EQUALS or event.key == pygame.K_PLUS:
                 camera.zoom = min(3.0, camera.zoom + 0.1)

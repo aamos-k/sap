@@ -20,8 +20,21 @@ LABEL_COL    = (200, 200, 200)
 FLASH_COL    = (255, 180,  60)
 GAME_OVER_BG = (  0,   0,   0, 180)
 
+SHOP_BG      = ( 20,  18,  30, 210)
+SHOP_BORDER  = (100,  80, 180)
+SHOP_GOLD    = (255, 210,  60)
+SHOP_TITLE   = (200, 160, 255)
+SHOP_ITEM_OK = (160, 230, 160)
+SHOP_ITEM_NO = ( 90,  90,  90)
+SHOP_KEY_COL = (255, 210,  60)
+DEPTH_COL    = (100, 200, 255)
+GA_COL       = (180, 130, 255)
 
 LIMB_ORDER = [LimbId.LEFT_ARM, LimbId.RIGHT_ARM, LimbId.LEFT_LEG, LimbId.RIGHT_LEG]
+
+SHOP_W = 220
+SHOP_ITEM_H = 48
+SHOP_PAD = 10
 
 
 class HUD:
@@ -40,19 +53,35 @@ class HUD:
             x = start_x + i * (BTN_W + BTN_GAP)
             self.btn_rects[lid] = pygame.Rect(x, y, BTN_W, BTN_H)
 
-        # Spear throw button — sits to the right of the limb buttons
         spear_x = (start_x + len(LIMB_ORDER) * (BTN_W + BTN_GAP) + BTN_GAP * 2)
         self._spear_btn_rect = pygame.Rect(spear_x, y, BTN_W + 8, BTN_H)
 
+        # Shop panel rect (right side, vertically centred)
+        self._shop_surf = pygame.Surface((SHOP_W, screen_h), pygame.SRCALPHA)
+
     def draw(self, screen: pygame.Surface, tm: TurnManager,
              mouse_pos: tuple[int, int], seed: int = 0,
-             spear: Spear | None = None) -> None:
+             spear: Spear | None = None,
+             depth_tiles: float = 0.0,
+             coins: int = 0,
+             player_in_shop: bool = False,
+             player_hp: int = 10,
+             player_max_hp: int = 10,
+             hp_upgrade_cost: int = 8,
+             reach_upgrade_cost: int = 5,
+             generation: int = 0,
+             total_deaths: int = 0) -> None:
         self._draw_turn_label(screen, tm)
+        self._draw_depth_meter(screen, depth_tiles)
         self._draw_limb_buttons(screen, tm, mouse_pos)
         self._draw_spear_button(screen, tm, mouse_pos, spear)
         self._draw_instructions(screen, tm, spear)
         self._draw_flash(screen, tm)
         self._draw_seed(screen, seed)
+        if player_in_shop:
+            self._draw_shop(screen, coins, player_hp, player_max_hp,
+                            hp_upgrade_cost, reach_upgrade_cost,
+                            generation, total_deaths)
         if tm.state == TurnState.GAME_OVER:
             self._draw_game_over(screen, tm)
 
@@ -70,6 +99,74 @@ class HUD:
 
         surf = self.font_large.render(text, True, colour)
         screen.blit(surf, (16, 12))
+
+    def _draw_depth_meter(self, screen: pygame.Surface, depth_tiles: float) -> None:
+        depth_int = int(depth_tiles)
+        text = f"Depth: {depth_int} m"
+        surf = self.font_large.render(text, True, DEPTH_COL)
+        screen.blit(surf, (16, 36))
+
+    def _draw_shop(self, screen: pygame.Surface,
+                   coins: int, player_hp: int, player_max_hp: int,
+                   hp_upgrade_cost: int, reach_upgrade_cost: int,
+                   generation: int, total_deaths: int) -> None:
+        items = [
+            ("[Q]", "Restore HP",    f"{3} coins",      coins >= 3 and player_hp < player_max_hp),
+            ("[E]", f"+2 Max HP",    f"{hp_upgrade_cost} coins",    coins >= hp_upgrade_cost),
+            ("[Z]", "+Limb Reach",   f"{reach_upgrade_cost} coins", coins >= reach_upgrade_cost),
+        ]
+
+        header_h   = 62
+        items_h    = len(items) * SHOP_ITEM_H
+        footer_h   = 50
+        panel_h    = header_h + items_h + footer_h + SHOP_PAD * 2
+        panel_x    = self.screen_w - SHOP_W - 12
+        panel_y    = self.screen_h // 2 - panel_h // 2
+
+        # Background panel
+        panel_surf = pygame.Surface((SHOP_W, panel_h), pygame.SRCALPHA)
+        panel_surf.fill(SHOP_BG)
+        pygame.draw.rect(panel_surf, SHOP_BORDER, (0, 0, SHOP_W, panel_h), 2, border_radius=6)
+        screen.blit(panel_surf, (panel_x, panel_y))
+
+        y = panel_y + SHOP_PAD
+
+        # Title
+        title = self.font_large.render("** SHOP **", True, SHOP_TITLE)
+        screen.blit(title, (panel_x + SHOP_W // 2 - title.get_width() // 2, y))
+        y += title.get_height() + 4
+
+        # Coins
+        coin_surf = self.font_large.render(f"Coins: {coins}", True, SHOP_GOLD)
+        screen.blit(coin_surf, (panel_x + SHOP_W // 2 - coin_surf.get_width() // 2, y))
+        y += coin_surf.get_height() + 8
+
+        # Separator
+        pygame.draw.line(screen, SHOP_BORDER,
+                         (panel_x + 6, y), (panel_x + SHOP_W - 6, y))
+        y += 6
+
+        # Items
+        for key_label, item_name, cost_text, affordable in items:
+            col = SHOP_ITEM_OK if affordable else SHOP_ITEM_NO
+            key_surf  = self.font_large.render(key_label, True, SHOP_KEY_COL if affordable else SHOP_ITEM_NO)
+            name_surf = self.font_large.render(item_name, True, col)
+            cost_surf = self.font_small.render(cost_text,  True, SHOP_GOLD if affordable else SHOP_ITEM_NO)
+            screen.blit(key_surf,  (panel_x + 8,  y + 2))
+            screen.blit(name_surf, (panel_x + 52, y + 2))
+            screen.blit(cost_surf, (panel_x + 52, y + 24))
+            y += SHOP_ITEM_H
+
+        # Footer: GA info
+        pygame.draw.line(screen, SHOP_BORDER,
+                         (panel_x + 6, y), (panel_x + SHOP_W - 6, y))
+        y += 6
+        if generation == 0:
+            ga_text = "GA: no evolutions yet"
+        else:
+            ga_text = f"GA Gen {generation}  kills: {total_deaths}"
+        ga_surf = self.font_small.render(ga_text, True, GA_COL)
+        screen.blit(ga_surf, (panel_x + SHOP_W // 2 - ga_surf.get_width() // 2, y))
 
     def _draw_limb_buttons(self, screen: pygame.Surface, tm: TurnManager,
                            mouse_pos: tuple[int, int]) -> None:
@@ -122,7 +219,6 @@ class HUD:
         screen.blit(t2, (rect.x + 12, rect.y + 22))
 
         if spear is not None and not spear.held and not spear.in_flight:
-            # Spear is on the ground — show a small "retrieve" hint dot
             pygame.draw.circle(screen, (255, 220, 80),
                                (rect.right - 8, rect.top + 8), 4)
 
@@ -173,6 +269,7 @@ class HUD:
         sub = self.font_large.render("Press R to restart", True, (180, 180, 180))
         screen.blit(sub, (self.screen_w // 2 - sub.get_width() // 2,
                           self.screen_h // 2 + 30))
+
     def _draw_seed(self, screen: pygame.Surface, seed: int) -> None:
         surf = self.font_small.render(f"seed: {seed}", True, (90, 90, 110))
         screen.blit(surf, (self.screen_w - surf.get_width() - 10, 10))

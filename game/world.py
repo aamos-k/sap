@@ -5,36 +5,41 @@ from cave.grid import CaveGrid
 from entities.player import Player
 from entities.enemy import Enemy
 from entities.slime_mold import SlimeMold
-from entities.loot_bag import LootBag
+from entities.loot_bag import LootBag, COIN_COUNT
 from entities.spear import Spear, SPEAR_DAMAGE
 from entities.limb import LimbId
 from game.physics import (resolve_anchoring, apply_gravity,
                            clamp_limb_to_open, check_collision_damage)
 from game.turn_manager import TurnManager, TurnState
+from game.ga import evolve, enemy_fitness
 from rendering.camera import Camera
 
 ENEMY_THINK_TICKS = 18
 TILE_SIZE         = 16
 _DT               = 1.0 / 60
 
-# Extend the cave when the player is this close to the grid bottom
-_EXTEND_TRIGGER_PX = 30 * 16   # 30 tiles
+_EXTEND_TRIGGER_PX = 30 * 16   # 30 tiles from grid bottom triggers extension
 _EXTENSION_TILES   = 160        # tile-rows added per extension
+
+# Shop zone hysteresis thresholds (relative to bulb Y in world pixels)
+_SHOP_ENTER_PX =  5 * TILE_SIZE   # player is in shop when <= shop_y + this
+_SHOP_EXIT_PX  = 14 * TILE_SIZE   # player has left when > shop_y + this
 
 
 class World:
     def __init__(self, seed: int = 0):
         self.seed = seed
-        self._rng = random.Random(seed + 99)
+        self._rng     = random.Random(seed + 99)
         self._ext_rng = random.Random(seed + 7777)
+        self._ga_rng  = random.Random(seed + 42)
         self._extension_count = 0
-        # flag read by CaveRenderer to detect grid growth
         self.cave_dirty = False
 
         grid, bulb, room_centres = generate_cave(width=400, height=80, seed=seed)
         self.grid: CaveGrid = grid
 
         bx, by = grid.tile_to_world(*bulb)
+        self._shop_y_px: float = by          # world-Y of the starting room centre
         self.player = Player.create(bx, by - TILE_SIZE)
 
         for lid in (LimbId.LEFT_LEG, LimbId.RIGHT_LEG):
@@ -42,6 +47,17 @@ class World:
             clamp_limb_to_open(limb, grid)
             resolve_anchoring(limb, grid)
         self.player.compute_body_position()
+
+        # ── GA / shop state ───────────────────────────────────────────────────
+        self._gene_pool: list[dict] = []   # evolved genomes for next spawns
+        self._total_deaths: int   = 0      # cumulative enemy kills (drives mutation)
+        self._generation: int     = 0      # how many evolutions have run
+        self._player_in_shop: bool = True  # starts in the top room
+        self.coins: int = 0
+
+        # Upgrade counters (used to scale costs)
+        self._hp_upgrades:    int = 0
+        self._reach_upgrades: int = 0
 
         self.enemies: list[Enemy | SlimeMold] = []
         self._spawn_enemies_in_rooms(room_centres, skip_first=3)
@@ -60,12 +76,37 @@ class World:
         )
         self._enemy_think_timer = 0
 
-    # ── entity iteration ──────────────────────────────────────────────────────
+    # ── public properties ─────────────────────────────────────────────────────
 
     @property
     def entities(self):
         yield self.player
         yield from self.enemies
+
+    @property
+    def player_in_shop(self) -> bool:
+        return self._player_in_shop
+
+    @property
+    def generation(self) -> int:
+        return self._generation
+
+    @property
+    def total_deaths(self) -> int:
+        return self._total_deaths
+
+    @property
+    def hp_upgrade_cost(self) -> int:
+        return 8 + self._hp_upgrades * 4
+
+    @property
+    def reach_upgrade_cost(self) -> int:
+        return 5 + self._reach_upgrades * 3
+
+    @property
+    def depth_tiles(self) -> float:
+        """Depth below the starting room, in tiles (negative = above start)."""
+        return max(0.0, (self.player.body_y - self._shop_y_px) / TILE_SIZE)
 
     # ── main tick ─────────────────────────────────────────────────────────────
 
@@ -79,13 +120,85 @@ class World:
                 self._enemy_think_timer = 0
                 self._run_enemy_turns()
 
-        # Soft-body slimes simulate every frame regardless of turn state
         self._step_slimes()
-
         self._update_bags()
         self._update_spear()
         self._maybe_extend_cave()
+        self._update_shop_state()
         self.camera.follow(self.player.body_x, self.player.body_y)
+
+    # ── shop state tracking ───────────────────────────────────────────────────
+
+    def _update_shop_state(self) -> None:
+        """Detect shop entry/departure with hysteresis; run GA on re-entry."""
+        py          = self.player.body_y
+        was_in_shop = self._player_in_shop
+
+        if py <= self._shop_y_px + _SHOP_ENTER_PX:
+            now_in_shop = True
+        elif py > self._shop_y_px + _SHOP_EXIT_PX:
+            now_in_shop = False
+        else:
+            now_in_shop = was_in_shop   # maintain state (hysteresis band)
+
+        if now_in_shop and not was_in_shop:
+            self._run_evolution()
+
+        self._player_in_shop = now_in_shop
+
+    def _run_evolution(self) -> None:
+        """Collect fitness data from living/dead enemies and evolve gene pool."""
+        genes_list:   list[dict] = []
+        fitness_list: list[float] = []
+        for e in self.enemies:
+            if isinstance(e, Enemy):
+                genes_list.append(e.genes)
+                fitness_list.append(enemy_fitness(e))
+
+        run_deaths = sum(1 for e in self.enemies
+                         if isinstance(e, Enemy) and not e.alive)
+        self._total_deaths += run_deaths
+
+        if genes_list:
+            self._gene_pool = evolve(
+                genes_list, fitness_list, self._ga_rng,
+                self._total_deaths, size=max(8, len(genes_list)),
+            )
+            self._generation += 1
+            self.turn_manager.set_flash(
+                f"GA evolved! Gen {self._generation}  "
+                f"({self._total_deaths} total kills)", ticks=180
+            )
+
+    # ── shop purchases ────────────────────────────────────────────────────────
+
+    def shop_buy_hp_restore(self) -> bool:
+        cost = 3
+        if self.coins >= cost and self.player.hp < self.player.max_hp:
+            self.coins -= cost
+            self.player.hp = self.player.max_hp
+            return True
+        return False
+
+    def shop_buy_max_hp(self) -> bool:
+        cost = self.hp_upgrade_cost
+        if self.coins >= cost:
+            self.coins -= cost
+            self.player.max_hp += 2
+            self.player.hp = min(self.player.hp + 2, self.player.max_hp)
+            self._hp_upgrades += 1
+            return True
+        return False
+
+    def shop_buy_reach(self) -> bool:
+        cost = self.reach_upgrade_cost
+        if self.coins >= cost:
+            self.coins -= cost
+            for limb in self.player.limbs.values():
+                limb.length += 8.0
+            self._reach_upgrades += 1
+            return True
+        return False
 
     # ── player action ─────────────────────────────────────────────────────────
 
@@ -108,13 +221,10 @@ class World:
         self._maybe_extend_cave()
         apply_gravity(self.player, self.grid)
 
-        # Limb-based damage against regular enemies
         check_collision_damage(self.player, [e for e in self.enemies
                                              if not isinstance(e, SlimeMold)])
-        # Particle-overlap damage against slimes
         for enemy in self.enemies:
             if isinstance(enemy, SlimeMold) and enemy.alive:
-                # Check if any player limb tip is inside the slime blob
                 from game.physics import HIT_RADIUS
                 for limb_obj in self.player.limbs.values():
                     if enemy.overlaps_body(limb_obj.tip_x, limb_obj.tip_y):
@@ -147,7 +257,6 @@ class World:
                 continue
 
             if isinstance(enemy, SlimeMold):
-                # Soft-body slimes: damage check via particle proximity
                 if enemy.overlaps_body(self.player.body_x, self.player.body_y):
                     self.player.take_damage(1)
                     if not self.player.alive:
@@ -155,7 +264,6 @@ class World:
                         return
                 continue
 
-            # Regular limb-based enemy
             lid, wx, wy = enemy.choose_move(
                 self.grid, self.player.body_x, self.player.body_y, self._rng)
             limb = enemy.get_limb(lid)
@@ -165,7 +273,10 @@ class World:
             enemy.compute_body_position()
             apply_gravity(enemy, self.grid)
 
+            player_hp_before = self.player.hp
             check_collision_damage(enemy, [self.player])
+            enemy.damage_dealt += player_hp_before - self.player.hp
+
             if not self.player.alive:
                 tm.set_game_over("enemy")
                 return
@@ -180,7 +291,7 @@ class World:
                 enemy.step(_DT, self.grid,
                            self.player.body_x, self.player.body_y)
 
-    # ── bag physics ───────────────────────────────────────────────────────────
+    # ── bag physics & coin collection ─────────────────────────────────────────
 
     def _player_limb_tips(self) -> list[tuple[float, float]]:
         return [(limb.tip_x, limb.tip_y) for limb in self.player.limbs.values()]
@@ -188,7 +299,10 @@ class World:
     def _update_bags(self) -> None:
         tips = self._player_limb_tips()
         for bag in self.bags:
+            was_spilled = bag.spilled
             bag.check_spill(tips)
+            if not was_spilled and bag.spilled:
+                self.coins += COIN_COUNT
             bag.update(self.grid, _DT)
 
     # ── spear physics & retrieval ─────────────────────────────────────────────
@@ -203,7 +317,7 @@ class World:
                     continue
                 if spear.check_hit(enemy):
                     enemy.take_damage(SPEAR_DAMAGE)
-                    spear.in_flight = False  # embeds in first enemy hit
+                    spear.in_flight = False
                     if all(not e.alive for e in self.enemies):
                         self.turn_manager.set_game_over("player")
                     break
@@ -246,7 +360,15 @@ class World:
                 if self._rng.random() < 0.45:
                     enemy: Enemy | SlimeMold = SlimeMold.create(spawn_x, spawn_y)
                 else:
-                    enemy = Enemy.create(spawn_x, spawn_y)
+                    # Draw from evolved gene pool if available
+                    genes = None
+                    if self._gene_pool:
+                        genes = dict(
+                            self._gene_pool[
+                                self._rng.randrange(len(self._gene_pool))
+                            ]
+                        )
+                    enemy = Enemy.create(spawn_x, spawn_y, genes=genes)
                     for lid in (LimbId.LEFT_LEG, LimbId.RIGHT_LEG):
                         limb = enemy.get_limb(lid)
                         clamp_limb_to_open(limb, self.grid)
